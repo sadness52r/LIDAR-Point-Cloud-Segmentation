@@ -12,11 +12,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="LiDAR processing CLI")
     parser.add_argument(
     "--dataset",
-    choices=["helimos", "helipr", "hercules", "gps"],
+    choices=["helimos", "helipr", "hercules", "gps", "ins", "imu"],
     required=True)
     parser.add_argument("--bin", type=str, required=False)
+    parser.add_argument("--ins", type=str, required=False, help="Путь к INS CSV файлу")
+    parser.add_argument("--imu", type=str, required=False, help="Путь к IMU CSV файлу")
     parser.add_argument("--gps", type=str, required=False, help="Путь к GPS CSV файлу")
-    parser.add_argument("--action", choices=["cloud", "velocity", "map"], required=True)
+    parser.add_argument("--action", choices=["cloud", "velocity", "map", "track", "accel"], required=True)
     parser.add_argument("--output", type=str, required=False, default=GPS_MAP_FILE, 
                        help=f"Путь для сохранения HTML карты GPS (по умолчанию: {GPS_MAP_FILE})")
 
@@ -80,6 +82,33 @@ def main() -> None:
             plot_velocity_vs_azimuth(pc)
         else:
             visualize_point_cloud(pc)
+    elif args.dataset == "ins":
+        from src.datasets.ins import load_ins
+        from src.viz.plots import plot_ins_track
+
+        if not args.ins:
+            print("Ошибка: для INS требуется указать --ins <путь_к_файлу.csv>")
+            return
+
+        ins_df = load_ins(args.ins)
+        if args.action == "track":
+            plot_ins_track(ins_df)
+        else:
+            print("Ошибка: для INS поддерживается только action='track'")
+
+    elif args.dataset == "imu":
+        from src.datasets.imu import load_imu
+        from src.viz.plots import plot_imu_accel
+
+        if not args.imu:
+            print("Ошибка: для IMU требуется указать --imu <путь_к_файлу.csv>")
+            return
+
+        imu_df = load_imu(args.imu)
+        if args.action == "accel":
+            plot_imu_accel(imu_df)
+        else:
+            print("Ошибка: для IMU поддерживается только action='accel'")
 
 
 

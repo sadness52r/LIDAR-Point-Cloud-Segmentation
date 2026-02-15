@@ -83,3 +83,24 @@ def plot_gps_on_map(gps_df, output_file='gps_map.html'):
     print(f"Карта сохранена в {output_file}")
     
     return map_gps
+
+def plot_ins_track(ins_df: pd.DataFrame) -> None:
+    plt.figure()
+    plt.plot(ins_df["longitude"], ins_df["latitude"])
+    plt.grid(True)
+    plt.xlabel("longitude")
+    plt.ylabel("latitude")
+    plt.title("INS track")
+    plt.show()
+
+def plot_imu_accel(imu_df: pd.DataFrame) -> None:
+    plt.figure()
+    plt.plot(imu_df["timestamp"], imu_df["acc_x"], label="acc_x")
+    plt.plot(imu_df["timestamp"], imu_df["acc_y"], label="acc_y")
+    plt.plot(imu_df["timestamp"], imu_df["acc_z"], label="acc_z")
+    plt.grid(True)
+    plt.xlabel("timestamp")
+    plt.ylabel("acc (m/s^2)")
+    plt.title("IMU acceleration")
+    plt.legend()
+    plt.show()
