@@ -12,12 +12,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="LiDAR processing CLI")
     parser.add_argument(
     "--dataset",
-    choices=["helimos", "helipr", "hercules", "gps", "ins", "imu"],
+    choices=["helimos", "helipr", "hercules", "gps", "ins", "imu", "radar"],
     required=True)
     parser.add_argument("--bin", type=str, required=False)
     parser.add_argument("--ins", type=str, required=False, help="Путь к INS CSV файлу")
     parser.add_argument("--imu", type=str, required=False, help="Путь к IMU CSV файлу")
     parser.add_argument("--gps", type=str, required=False, help="Путь к GPS CSV файлу")
+    parser.add_argument("--radar", type=str, required=False, help="Путь к Radar BIN файлу")
     parser.add_argument("--action", choices=["cloud", "velocity", "map", "track", "accel"], required=True)
     parser.add_argument("--output", type=str, required=False, default=GPS_MAP_FILE, 
                        help=f"Путь для сохранения HTML карты GPS (по умолчанию: {GPS_MAP_FILE})")
@@ -82,6 +83,23 @@ def main() -> None:
             plot_velocity_vs_azimuth(pc)
         else:
             visualize_point_cloud(pc)
+    
+    elif args.dataset == "radar":
+        from src.datasets.radar import load_radar_frame
+        from src.viz.clouds import visualize_point_cloud
+        from src.viz.plots import plot_velocity_vs_azimuth
+
+        if not args.radar:
+            print("Ошибка: для radar требуется указать --radar <путь_к_файлу.bin>")
+            return
+
+        pc = load_radar_frame(args.radar)
+        if args.action == "velocity":
+            plot_velocity_vs_azimuth(pc)
+        else:
+            visualize_point_cloud(pc)
+
+
     elif args.dataset == "ins":
         from src.datasets.ins import load_ins
         from src.viz.plots import plot_ins_track
