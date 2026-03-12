@@ -307,10 +307,13 @@ class MotionSegmenter:
                       load).
     """
 
-    def __init__(self, threshold: float = 0.85) -> None:
+    def __init__(self, threshold: float = 0.85, inlier_threshold: float = 0.5,
+                 use_gpu: bool = False) -> None:
         self.classifier: Optional[RandomForestClassifier] = None
         self.scaler: Optional[StandardScaler] = None
         self.threshold = threshold  # P(moving) выше этого → moving
+        self.inlier_threshold = inlier_threshold  # RANSAC residual threshold [m/s]
+        self.use_gpu = use_gpu
 
     # ── Training ─────────────────────────────────────────────────────────────
 
@@ -410,24 +413,54 @@ class MotionSegmenter:
         self.scaler = StandardScaler()
         X_sc = self.scaler.fit_transform(X)
 
-        self.classifier = RandomForestClassifier(
-            n_estimators=100,
-            max_depth=15,
-            min_samples_leaf=10,
-            n_jobs=-1,
-            random_state=42,
-            class_weight="balanced",
-        )
-        print("[MOS] Training Random Forest …")
-        self.classifier.fit(X_sc, y)
+        if self.use_gpu:
+            self.classifier = self._make_xgb_classifier(X_sc, y)
+        else:
+            self.classifier = RandomForestClassifier(
+                n_estimators=100,
+                max_depth=15,
+                min_samples_leaf=10,
+                n_jobs=-1,
+                random_state=42,
+                class_weight="balanced",
+            )
+            print("[MOS] Training Random Forest (CPU) …")
+            self.classifier.fit(X_sc, y)
 
         feat_names = ["x", "y", "z", "range", "azimuth", "elevation", "intensity"]
         if X.shape[1] > 7:
             feat_names.append("velocity")
         print("[MOS] Feature importances:")
-        for name, imp in zip(feat_names, self.classifier.feature_importances_):
+        importances = self.classifier.feature_importances_
+        for name, imp in zip(feat_names, importances):
             bar = "█" * int(imp * 50)
             print(f"  {name:10s} {imp:.3f}  {bar}")
+
+    # ── GPU (XGBoost) ────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _make_xgb_classifier(X_sc: np.ndarray, y: np.ndarray):
+        """Create and train an XGBClassifier on GPU (CUDA)."""
+        import xgboost as xgb
+
+        n_pos = int((y == 1).sum())
+        n_neg = int((y == 0).sum())
+        scale = n_neg / max(n_pos, 1)
+
+        clf = xgb.XGBClassifier(
+            n_estimators=300,
+            max_depth=10,
+            learning_rate=0.1,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            scale_pos_weight=scale,
+            eval_metric="logloss",
+            device="cuda",
+            random_state=42,
+        )
+        print("[MOS] Training XGBoost (GPU/CUDA) …")
+        clf.fit(X_sc, y)
+        return clf
 
     # ── Inference ─────────────────────────────────────────────────────────────
 
@@ -465,7 +498,7 @@ class MotionSegmenter:
         results: List[np.ndarray] = []
         for pc in frames:
             if use_velocity:
-                _, is_static = ransac_ego_motion(pc)
+                _, is_static = ransac_ego_motion(pc, inlier_threshold=self.inlier_threshold)
                 results.append(~is_static)
             else:
                 feats = _extract_features(pc)

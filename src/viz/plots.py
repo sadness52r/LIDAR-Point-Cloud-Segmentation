@@ -128,14 +128,18 @@ def plot_mos(
     is_moving: np.ndarray,
     ego_params: "np.ndarray | None" = None,
     title: str = "",
+    camera_img: "np.ndarray | None" = None,
 ) -> None:
     """
-    Два 2D-графика MOS-результата (static vs moving):
+    2D-графики MOS-результата (static vs moving) с опциональным кадром камеры.
 
-    Левый  — radial velocity vs azimuth (v_r(α)):
-             статические точки серые, движущиеся красные,
-             RANSAC-кривая чёрная.
-    Правый — bird's-eye view (x, y) с теми же цветами.
+    Панели (без камеры):
+      Левый  — radial velocity vs azimuth (только при наличии velocity)
+      Правый — bird's-eye view (x, y)
+
+    Панели (с камерой):
+      Верхний ряд — velocity vs azimuth + bird's-eye view
+      Нижний ряд  — изображение с камеры (на всю ширину)
 
     Parameters
     ----------
@@ -143,6 +147,7 @@ def plot_mos(
     is_moving   : bool mask
     ego_params  : [Vx, Vy] для отрисовки RANSAC-кривой (опционально)
     title       : заголовок окна
+    camera_img  : RGB-массив (H, W, 3) с кадром камеры (опционально)
     """
     x, y, z = pc.xyz[:, 0], pc.xyz[:, 1], pc.xyz[:, 2]
     azimuth_deg = np.degrees(np.arctan2(y, x))
@@ -150,12 +155,30 @@ def plot_mos(
 
     static_mask = ~is_moving
 
-    if has_velocity:
-        fig, (ax_vel, ax_bev) = plt.subplots(1, 2, figsize=(16, 7))
-        if title:
-            fig.suptitle(title, fontsize=13)
+    # ── Build figure layout ───────────────────────────────────────────────
+    if camera_img is not None:
+        if has_velocity:
+            fig = plt.figure(figsize=(16, 12))
+            gs = fig.add_gridspec(2, 2, height_ratios=[1, 0.65], hspace=0.35, wspace=0.3)
+            ax_vel = fig.add_subplot(gs[0, 0])
+            ax_bev = fig.add_subplot(gs[0, 1])
+            ax_cam = fig.add_subplot(gs[1, :])
+        else:
+            fig = plt.figure(figsize=(14, 10))
+            gs = fig.add_gridspec(2, 1, height_ratios=[1, 0.65], hspace=0.35)
+            ax_bev = fig.add_subplot(gs[0])
+            ax_cam = fig.add_subplot(gs[1])
+    else:
+        if has_velocity:
+            fig, (ax_vel, ax_bev) = plt.subplots(1, 2, figsize=(16, 7))
+        else:
+            fig, ax_bev = plt.subplots(1, 1, figsize=(9, 7))
 
-        # ── Left: velocity vs azimuth ──────────────────────────────────────
+    if title:
+        fig.suptitle(title, fontsize=13)
+
+    # ── Velocity vs Azimuth ───────────────────────────────────────────────
+    if has_velocity:
         v = pc.velocity
         ax_vel.scatter(
             azimuth_deg[static_mask], v[static_mask],
@@ -176,10 +199,6 @@ def plot_mos(
         ax_vel.set_title("Radial velocity vs Azimuth")
         ax_vel.legend(loc="lower left", fontsize=8, markerscale=3)
         ax_vel.grid(True, alpha=0.3)
-    else:
-        fig, ax_bev = plt.subplots(1, 1, figsize=(9, 7))
-        if title:
-            fig.suptitle(title, fontsize=13)
 
     # ── Bird's-eye view (x, y) ────────────────────────────────────────────
     ax_bev.scatter(
@@ -196,6 +215,12 @@ def plot_mos(
     ax_bev.set_aspect("equal")
     ax_bev.legend(loc="upper right", fontsize=8, markerscale=3)
     ax_bev.grid(True, alpha=0.3)
+
+    # ── Camera image ──────────────────────────────────────────────────────
+    if camera_img is not None:
+        ax_cam.imshow(camera_img)
+        ax_cam.set_title("Stereo Left Camera", fontsize=10)
+        ax_cam.axis("off")
 
     plt.tight_layout()
     plt.show()
