@@ -2,7 +2,6 @@ import sys
 import os
 import argparse
 
-# Добавляем родительскую директорию в sys.path для импортов
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.config import GPS_MAP_FILE
@@ -136,7 +135,7 @@ def main() -> None:
 
         [is_moving] = seg.segment_frames([pc])
 
-        # RANSAC ego-motion curve (if velocity available)
+        # RANSAC кривая собственной скорости (если скорость есть)
         ego_params = None
         if pc.velocity is not None:
             ego_params, _ = ransac_ego_motion(pc, inlier_threshold=args.inlier_threshold)

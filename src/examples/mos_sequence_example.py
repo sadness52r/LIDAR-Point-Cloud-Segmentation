@@ -6,9 +6,6 @@
     ────────────┼──────────────
     velocity    │ BEV (зум)
 
-Оси вычисляются один раз по первым N кадрам и дальше не меняются,
-поэтому графики не скачут между кадрами.
-
 Использование:
     python -m src.examples.mos_sequence_example \
         --aeva   03_Day/Aeva \
@@ -36,7 +33,6 @@ from src.motion_segmentation import MotionSegmenter, ransac_ego_motion
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
-
 def _build_camera_index(camera_dir: str):
     """Return sorted list of (timestamp_ns, filepath) for all .png files."""
     entries = []
@@ -117,7 +113,6 @@ def _compute_fixed_limits(bin_files, n_probe=20):
 
 
 # ── Drawing ───────────────────────────────────────────────────────────────────
-
 def _draw_frame(fig, axes, pc, is_moving, ego_params, camera_img,
                 frame_idx, n_frames, lim):
     """Clear axes and redraw a single MOS frame with fixed axis limits."""

@@ -28,7 +28,7 @@ def plot_gps_on_map(gps_df, output_file='gps_map.html'):
     """
     Визуализация GPS траектории на интерактивной карте Google Maps (через Folium).
     
-    Args:
+    Parameters:
         gps_df: DataFrame с GPS данными (должны быть колонки 'lat' и 'lon')
         output_file: путь для сохранения HTML файла карты
     """
@@ -141,13 +141,12 @@ def plot_mos(
       Верхний ряд — velocity vs azimuth + bird's-eye view
       Нижний ряд  — изображение с камеры (на всю ширину)
 
-    Parameters
-    ----------
-    pc          : PointCloud (xyz обязательно, velocity — опционально)
-    is_moving   : bool mask
-    ego_params  : [Vx, Vy] для отрисовки RANSAC-кривой (опционально)
-    title       : заголовок окна
-    camera_img  : RGB-массив (H, W, 3) с кадром камеры (опционально)
+    Parameters:
+        pc          : PointCloud (xyz обязательно, velocity — опционально)
+        is_moving   : bool mask
+        ego_params  : [Vx, Vy] для отрисовки RANSAC-кривой (опционально)
+        title       : заголовок окна
+        camera_img  : RGB-массив (H, W, 3) с кадром камеры (опционально)
     """
     x, y, z = pc.xyz[:, 0], pc.xyz[:, 1], pc.xyz[:, 2]
     azimuth_deg = np.degrees(np.arctan2(y, x))

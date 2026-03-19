@@ -59,21 +59,19 @@ def visualize_mos(
     """
     Visualise moving / static classification for one or more frames.
 
-    Colour scheme
-    -------------
-    Static points       → grey
-    Moving noise  (-1)  → dim red  (only when cluster_ids supplied)
-    Moving clusters     → distinct colours per object
-    Moving (no cluster) → bright red
+    Colour scheme:
+    Static points       -> grey
+    Moving noise  (-1)  -> dim red  (only when cluster_ids supplied)
+    Moving clusters     -> distinct colours per object
+    Moving (no cluster) -> bright red
 
-    Parameters
-    ----------
-    pcs              : list of PointCloud objects (one or more frames)
-    is_moving_list   : list of bool arrays, True = moving (one per frame)
-    cluster_ids_list : optional list of int32 arrays from
-                       cluster_moving_objects().  Values:
-                         -2 → static, -1 → noise, ≥0 → cluster
-    window_name      : Open3D window title
+    Parameters:
+        pcs              : list of PointCloud objects (one or more frames)
+        is_moving_list   : list of bool arrays, True = moving (one per frame)
+        cluster_ids_list : optional list of int32 arrays from cluster_moving_objects(). 
+                        Values:
+                        -2 -> static, -1 -> noise, ≥0 -> cluster
+        window_name      : Open3D window title
     """
     geometries = []
     frame_gap = 0.0   # will be set from first frame bounding box

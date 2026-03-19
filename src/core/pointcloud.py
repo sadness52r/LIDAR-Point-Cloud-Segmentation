@@ -9,9 +9,9 @@ class PointCloud:
     Унифицированное представление облака точек.
 
     Attributes:
-    xyz: ndarray формы (N, 3)
-    intensity: ndarray формы (N,) или None
-    velocity: ndarray формы (N,) или None
+        xyz: ndarray формы (N, 3)
+        intensity: ndarray формы (N,) или None
+        velocity: ndarray формы (N,) или None
     """
 
     xyz: np.ndarray
