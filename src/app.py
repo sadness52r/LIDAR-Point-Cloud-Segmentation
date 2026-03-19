@@ -2,10 +2,29 @@ import sys
 import os
 import argparse
 
-# Добавляем родительскую директорию в sys.path для импортов
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.config import GPS_MAP_FILE
+
+
+def _find_closest_camera_image(camera_dir: str, lidar_ts: int):
+    """
+    Finds the stereo camera image whose filename timestamp is closest
+    to lidar_ts (both in nanoseconds).  Returns the full path or None.
+    """
+    try:
+        files = [f for f in os.listdir(camera_dir) if f.lower().endswith(".png")]
+        candidates = []
+        for f in files:
+            stem = os.path.splitext(f)[0]
+            if stem.isdigit():
+                candidates.append((int(stem), f))
+        if not candidates:
+            return None
+        closest = min(candidates, key=lambda x: abs(x[0] - lidar_ts))
+        return os.path.join(camera_dir, closest[1])
+    except Exception:
+        return None
 
 
 def main() -> None:
@@ -45,6 +64,13 @@ def main() -> None:
                         help="Размер временного окна для temporal MOS (по умолчанию: 3)")
     parser.add_argument("--threshold", type=float, required=False, default=0.85,
                         help="Порог P(moving) для RF классификатора (по умолчанию: 0.85)")
+    parser.add_argument("--inlier-threshold", type=float, required=False, default=0.5,
+                        help="RANSAC inlier threshold [m/s] для Doppler MOS (по умолчанию: 0.5)")
+    parser.add_argument("--camera", type=str, required=False,
+                        help="Папка со снимками стерео-камеры (stereo_left). "
+                             "Ближайший по временной метке кадр добавляется к MOS-графику.")
+    parser.add_argument("--gpu", action="store_true",
+                        help="Использовать GPU (XGBoost CUDA) вместо CPU (Random Forest) для обучения MOS")
 
     args = parser.parse_args()
 
@@ -54,7 +80,7 @@ def main() -> None:
         from src.motion_segmentation import MotionSegmenter
 
         data_root = args.sequence or "data/Deskewed_LiDAR"
-        seg = MotionSegmenter(threshold=args.threshold)
+        seg = MotionSegmenter(threshold=args.threshold, inlier_threshold=args.inlier_threshold, use_gpu=args.gpu)
         seg.train_on_helimos(
             data_root=data_root,
             sensor=args.sensor,
@@ -94,21 +120,46 @@ def main() -> None:
                 return
             pc = load_helimos_frame(args.bin)
 
-        seg = MotionSegmenter(threshold=args.threshold)
-        seg.load(args.model)
+        seg = MotionSegmenter(threshold=args.threshold, inlier_threshold=args.inlier_threshold, use_gpu=args.gpu)
+
+        # Модель нужна только для сенсоров без Doppler-скорости.
+        # Для Aeva/Radar (velocity != None) используется RANSAC — модель не требуется.
+        if pc.velocity is None:
+            if not os.path.exists(args.model):
+                print(f"Ошибка: модель не найдена ({args.model}). "
+                      "Для сенсоров без Doppler-скорости необходимо обучить модель (--action mos-train).")
+                return
+            seg.load(args.model)
+        else:
+            print("[MOS] Doppler velocity detected → using RANSAC (model not needed)")
 
         [is_moving] = seg.segment_frames([pc])
 
-        # RANSAC ego-motion curve (if velocity available)
+        # RANSAC кривая собственной скорости (если скорость есть)
         ego_params = None
         if pc.velocity is not None:
-            ego_params, _ = ransac_ego_motion(pc)
+            ego_params, _ = ransac_ego_motion(pc, inlier_threshold=args.inlier_threshold)
 
         n_moving = int(is_moving.sum())
         n_total = len(is_moving)
         print(f"Moving: {n_moving}/{n_total} points ({100*n_moving/n_total:.1f}%)")
 
-        plot_mos(pc, is_moving, ego_params=ego_params)
+        camera_img = None
+        if args.camera:
+            import matplotlib.image as mpimg
+            bin_stem = os.path.splitext(os.path.basename(args.bin))[0]
+            if bin_stem.isdigit():
+                lidar_ts = int(bin_stem)
+                img_path = _find_closest_camera_image(args.camera, lidar_ts)
+                if img_path:
+                    camera_img = mpimg.imread(img_path)
+                    print(f"Camera image: {os.path.basename(img_path)}")
+                else:
+                    print("Предупреждение: камерных изображений в указанной папке не найдено.")
+            else:
+                print("Предупреждение: имя .bin-файла не является временной меткой — камера проигнорирована.")
+
+        plot_mos(pc, is_moving, ego_params=ego_params, camera_img=camera_img)
         return
 
     if args.action == "mos-sequence":
@@ -117,7 +168,7 @@ def main() -> None:
         from src.viz.clouds import visualize_mos
 
         data_root = args.sequence or "data/Deskewed_LiDAR"
-        seg = MotionSegmenter(threshold=args.threshold)
+        seg = MotionSegmenter(threshold=args.threshold, inlier_threshold=args.inlier_threshold, use_gpu=args.gpu)
         seg.load(args.model)
 
         frames, _, poses = load_helimos_sequence(

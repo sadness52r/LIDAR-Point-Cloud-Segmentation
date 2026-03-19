@@ -122,7 +122,11 @@ python -m src.app --dataset hercules --imu <path_to_imu.csv> --action accel
 Обучение на HeLiMOS (ground truth labels: static=9, moving=251):
 
 ```bash
+# CPU (Random Forest, scikit-learn)
 python -m src.app --dataset helimos --action mos-train --sequence data/Deskewed_LiDAR --sensor Velodyne --split train
+
+# GPU (XGBoost CUDA) — значительно быстрее при наличии NVIDIA GPU
+python -m src.app --dataset helimos --action mos-train --sequence data/Deskewed_LiDAR --sensor Velodyne --split train --gpu
 ```
 
 Параметры:
@@ -131,31 +135,48 @@ python -m src.app --dataset helimos --action mos-train --sequence data/Deskewed_
 - `--split` — раздел датасета: `train`, `val`, `test` (по умолчанию: `train`)
 - `--max-frames` — ограничить число кадров для обучения (по умолчанию: все)
 - `--model` — путь для сохранения модели (по умолчанию: `models/mos_rf.pkl`)
-- `--threshold` — порог P(moving) для классификатора (по умолчанию: `0.85`)
+- `--threshold` — порог P(moving) для RF классификатора (по умолчанию: `0.85`)
+- `--inlier-threshold` — RANSAC inlier threshold в м/с для Doppler-сенсоров (по умолчанию: `0.5`)
+- `--gpu` — обучение на GPU через XGBoost CUDA (требуется NVIDIA GPU и установленный `xgboost`)
 
-Обучение занимает ~2 минуты. Модель сохраняется в `models/mos_rf.pkl`.
+Модель сохраняется в `models/mos_rf.pkl`. Модели GPU и CPU взаимозаменяемы при инференсе.
 
 ### 2. Инференс на одном кадре
 
-Работает с любым датасетом — loader выбирается по `--dataset`:
+Работает с любым датасетом — loader выбирается по `--dataset`.
+
+**Важно:** для сенсоров с Doppler-скоростью (Aeva, Radar) используется RANSAC — обученная модель **не нужна**, `--model` можно не указывать. Для сенсоров без Допплера (Velodyne, Ouster) требуется обученная модель (`--model`).
 
 ```bash
-# HeLiMOS (Velodyne, без Допплера — на левом графике height profile)
+# HeLiMOS Velodyne (без Допплера — нужна модель)
 python -m src.app --dataset helimos --bin <path_to_helimos.bin> --action mos --model models/mos_rf.pkl
 
-# HeLiPR Aeva (есть Допплер — на левом графике radial velocity vs azimuth)
-python -m src.app --dataset helipr --bin <path_to_aeva.bin> --action mos --model models/mos_rf.pkl
+# HeLiPR Aeva (есть Допплер — модель не нужна, используется RANSAC)
+python -m src.app --dataset helipr --bin <path_to_aeva.bin> --action mos
 
-# Hercules Aeva
-python -m src.app --dataset hercules --bin <path_to_aeva.bin> --action mos --model models/mos_rf.pkl
+# Hercules Aeva (есть Допплер — RANSAC)
+python -m src.app --dataset hercules --bin <path_to_aeva.bin> --action mos
 
-# Hercules Radar
-python -m src.app --dataset hercules --radar <path_to_radar.bin> --action mos --model models/mos_rf.pkl
+# Hercules Radar (есть Допплер — RANSAC)
+python -m src.app --dataset hercules --radar <path_to_radar.bin> --action mos
 ```
 
-Результат — два графика matplotlib:
-- **Левый**: radial velocity vs azimuth (если есть Допплер) или height profile (если нет) — серые точки = static, красные = moving
+С изображением стерео-камеры (файлы из `03_Day/stereo_left`):
+
+```bash
+python -m src.app --dataset hercules --bin 03_Day/Aeva/1738300381892782006.bin --action mos --camera 03_Day/stereo_left
+```
+
+Ближайший по временной метке кадр камеры автоматически подбирается и отображается на нижней панели графика.
+
+Результат — графики matplotlib:
+- **Левый**: radial velocity vs azimuth (если есть Допплер) — серые точки = static, красные = moving, чёрная линия = RANSAC-кривая эго-движения
 - **Правый**: bird's-eye view (x, y) — те же цвета
+- **Нижний** (при `--camera`): изображение со стерео-камеры
+
+Параметры MOS:
+- `--threshold` — порог P(moving) для RF классификатора (по умолчанию: `0.85`)
+- `--inlier-threshold` — RANSAC inlier threshold в м/с для Doppler-сенсоров (по умолчанию: `0.5`). Увеличение значения снижает число ложных moving-точек
 
 ### 3. Инференс на последовательности кадров
 
@@ -169,12 +190,45 @@ python -m src.app --dataset helimos --action mos-sequence --sequence data/Deskew
 - `--n-frames` — число кадров для обработки (по умолчанию: `5`)
 - `--n-context` — размер временного окна для temporal consistency (по умолчанию: `3`)
 
+### 4. Покадровый рендеринг последовательности (для GIF / видео)
+
+Скрипт `src/examples/mos_sequence_example.py` обрабатывает все кадры Aeva и сохраняет каждый как PNG с фиксированными осями (графики не скачут между кадрами):
+
+```bash
+python -m src.examples.mos_sequence_example \
+    --aeva   03_Day/Aeva \
+    --camera 03_Day/stereo_left \
+    --output output/mos_frames
+```
+
+Для Aeva (есть Допплер) модель не нужна — используется RANSAC. Для сенсоров без Допплера добавьте `--model models/mos_rf.pkl`.
+
+Параметры:
+- `--start` — начальный индекс кадра (по умолчанию: `0`)
+- `--max-frames` — максимальное число кадров (по умолчанию: все)
+- `--model` — путь к MOS модели (нужна только для сенсоров без Допплера)
+- `--inlier-threshold` — RANSAC порог (по умолчанию: `0.5`)
+- `--dpi` — разрешение выходных изображений (по умолчанию: `120`)
+
+Сетка 2x2: камера (верх-лево), BEV полный (верх-право), velocity vs azimuth (низ-лево), BEV зум (низ-право).
+
+Сборка GIF/видео из полученных кадров:
+
+```bash
+# GIF (ImageMagick)
+magick convert -delay 10 -loop 0 output/mos_frames/*.png mos.gif
+
+# MP4 (ffmpeg)
+ffmpeg -framerate 10 -i output/mos_frames/%06d.png -c:v libx264 -pix_fmt yuv420p mos.mp4
+```
+
 ---
 
 ## Примеры
 
-- Скрипт-пример чтения и визуализации GPS: `src/examples/gps_example.py` (использует константы из `src/config.py`).
-- CLI: `src/app.py` — универсальный интерфейс для всех датасетов.
+- `src/examples/gps_example.py` — чтение и визуализация GPS на карте (использует константы из `src/config.py`)
+- `src/examples/mos_sequence_example.py` — покадровый рендеринг MOS для Hercules Aeva + стерео-камера
+- CLI: `src/app.py` — универсальный интерфейс для всех датасетов
 
 ---
 
@@ -186,7 +240,8 @@ python -m src.app --dataset helimos --action mos-sequence --sequence data/Deskew
 - matplotlib — графики
 - open3d — (опционально) визуализация облаков точек
 - scikit-learn — Random Forest для MOS
+- xgboost — (опционально) GPU-ускоренное обучение MOS через CUDA
 - joblib — сериализация модели
 
-Примечание: если вам не нужна визуализация облаков точек, можно пропустить установку `open3d`.
+Примечание: если вам не нужна визуализация облаков точек, можно пропустить установку `open3d`. `xgboost` нужен только при использовании флага `--gpu`.
 

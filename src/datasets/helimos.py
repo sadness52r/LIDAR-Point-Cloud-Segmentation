@@ -26,20 +26,18 @@ def load_helimos_sequence(
     """
     Загружает последовательность кадров HeLiMOS.
 
-    Parameters
-    ----------
-    data_root   : корень датасета Deskewed_LiDAR
-    sensor      : 'Velodyne', 'Ouster', 'Avia' или 'Aeva'
-    frame_ids   : конкретные ID кадров; если None — берётся из split-файла
-    split       : 'train', 'val' или 'test' (используется если frame_ids=None)
-    max_frames  : ограничение числа кадров
-    load_labels : загружать ли метки (если файл существует)
+    Parameters:
+        data_root   : корень датасета Deskewed_LiDAR
+        sensor      : 'Velodyne', 'Ouster', 'Avia' или 'Aeva'
+        frame_ids   : конкретные ID кадров; если None — берётся из split-файла
+        split       : 'train', 'val' или 'test' (используется если frame_ids=None)
+        max_frames  : ограничение числа кадров
+        load_labels : загружать ли метки (если файл существует)
 
-    Returns
-    -------
-    frames      : список PointCloud
-    labels_list : список массивов semantic-меток (uint16), или None
-    poses       : (N, 12) массив поз из poses.txt, или None
+    Returns:
+        frames      : список PointCloud
+        labels_list : список массивов semantic-меток (uint16), или None
+        poses       : (N, 12) массив поз из poses.txt, или None
     """
     if frame_ids is None:
         split_file = os.path.join(data_root, f"{split}.txt")

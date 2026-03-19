@@ -8,8 +8,8 @@ def read_label(path: str | Path) -> Tuple[np.ndarray, np.ndarray]:
     Читает .label файл HeLiMOS / KITTI формата.
 
     Returns:
-    semantic_labels: ndarray (N,)
-    instance_ids: ndarray (N,)
+        semantic_labels: ndarray (N,)
+        instance_ids: ndarray (N,)
     """
     path = Path(path)
 

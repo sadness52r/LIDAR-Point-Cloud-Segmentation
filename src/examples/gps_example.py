@@ -5,7 +5,6 @@
 import sys
 import os
 
-# Добавляем родительскую директорию в sys.path для импортов
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 import pandas as pd
