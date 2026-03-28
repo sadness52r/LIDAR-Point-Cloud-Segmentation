@@ -63,9 +63,11 @@ python -m src.app --dataset hercules --radar <path_to_radar.bin> --action veloci
 
 # GPS (--gps)
 python -m src.app --dataset hercules --gps <path_to_gps.csv> --action map
+python -m src.app --dataset hercules --gps <path_to_gps.csv> --action ego-velocity
 
 # INS (--ins)
 python -m src.app --dataset hercules --ins <path_to_ins.csv> --action track
+python -m src.app --dataset hercules --ins <path_to_ins.csv> --action ego-velocity
 
 # IMU (--imu)
 python -m src.app --dataset hercules --imu <path_to_imu.csv> --action accel
@@ -236,6 +238,7 @@ ffmpeg -framerate 10 -i output/mos_frames/%06d.png -c:v libx264 -pix_fmt yuv420p
 
 См. `requirements.txt`. Основные пакеты:
 - pandas, numpy — базовая работа с данными
+- pyproj - преобразование координат GPS 
 - folium — интерактивные карты
 - matplotlib — графики
 - open3d — (опционально) визуализация облаков точек
