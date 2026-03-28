@@ -39,7 +39,7 @@ def main() -> None:
     parser.add_argument("--gps", type=str, required=False, help="Путь к GPS CSV файлу")
     parser.add_argument("--radar", type=str, required=False, help="Путь к Radar BIN файлу")
     parser.add_argument("--action",
-                        choices=["cloud", "velocity", "map", "track", "accel",
+                        choices=["cloud", "velocity", "ego-velocity", "map", "track", "accel",
                                  "mos", "mos-train", "mos-sequence"],
                         required=True)
     parser.add_argument("--output", type=str, required=False, default=GPS_MAP_FILE,
@@ -239,8 +239,15 @@ def main() -> None:
                 gps_df = read_GPS(args.gps)
                 if gps_df is not None:
                     plot_gps_on_map(gps_df, args.output)
+            elif args.action == "ego-velocity":
+                from src.odometry import GPS_to_V
+                from src.viz.plots import plot_ego_velocity
+                gps_df = read_GPS(args.gps)
+                if gps_df is not None:
+                    Vx, Vy, ts = GPS_to_V(gps_df)
+                    plot_ego_velocity(Vx, Vy, ts, source="GPS")
             else:
-                print("Ошибка: для --gps поддерживается только action='map'")
+                print("Ошибка: для --gps поддерживаются action='map' и action='ego-velocity'")
 
         # INS
         elif args.ins:
@@ -250,8 +257,14 @@ def main() -> None:
             if args.action == "track":
                 ins_df = load_ins(args.ins)
                 plot_ins_track(ins_df)
+            elif args.action == "ego-velocity":
+                from src.odometry import INS_to_V
+                from src.viz.plots import plot_ego_velocity
+                ins_df = load_ins(args.ins)
+                Vx, Vy, ts = INS_to_V(ins_df)
+                plot_ego_velocity(Vx, Vy, ts, source="INS")
             else:
-                print("Ошибка: для --ins поддерживается только action='track'")
+                print("Ошибка: для --ins поддерживаются action='track' и action='ego-velocity'")
 
         # IMU
         elif args.imu:

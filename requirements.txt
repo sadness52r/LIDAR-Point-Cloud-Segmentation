@@ -2,6 +2,7 @@ open3d
 numpy
 matplotlib
 pandas
+pyproj
 folium
 scikit-learn
 joblib

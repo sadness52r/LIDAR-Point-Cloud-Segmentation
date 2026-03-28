@@ -223,3 +223,38 @@ def plot_mos(
 
     plt.tight_layout()
     plt.show()
+
+# ── Velocity from GPS / INS ─────────────────────────────────────────────────
+ 
+def plot_ego_velocity(Vx: np.ndarray, Vy: np.ndarray, ts: np.ndarray,
+                      source: str = "GPS") -> None:
+    """
+    График компонент эго-скорости (Vx, Vy) и абсолютной скорости от времени.
+ 
+    Parameters:
+        Vx     : np.ndarray — скорость по оси X (ECEF), м/с
+        Vy     : np.ndarray — скорость по оси Y (ECEF), м/с
+        ts     : np.ndarray — временные метки (секунды)
+        source : str — источник данных ('GPS' или 'INS')
+    """
+    V = np.sqrt(Vx**2 + Vy**2)
+    t_rel = ts - ts[0]  # относительное время от начала
+ 
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
+    fig.suptitle(f"Ego-velocity from {source}", fontsize=13)
+ 
+    ax1.plot(t_rel, Vx, label="Vx", linewidth=0.8)
+    ax1.plot(t_rel, Vy, label="Vy", linewidth=0.8)
+    ax1.set_ylabel("Velocity [m/s]")
+    ax1.set_title("ECEF velocity components")
+    ax1.legend()
+    ax1.grid(True, alpha=0.3)
+ 
+    ax2.plot(t_rel, V, color="#e63333", linewidth=0.8)
+    ax2.set_xlabel("Time [s]")
+    ax2.set_ylabel("|V| [m/s]")
+    ax2.set_title("Absolute velocity")
+    ax2.grid(True, alpha=0.3)
+ 
+    plt.tight_layout()
+    plt.show()
