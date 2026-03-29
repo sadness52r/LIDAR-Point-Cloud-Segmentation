@@ -9,8 +9,10 @@ from src.config import GPS_MAP_FILE
 
 def _find_closest_camera_image(camera_dir: str, lidar_ts: int):
     """
-    Finds the stereo camera image whose filename timestamp is closest
-    to lidar_ts (both in nanoseconds).  Returns the full path or None.
+    Находит изображение с камеры, чья временная метка ближе всего к
+    временной метке кадра с лидара (оба в наносекундах).
+    Вернет:
+        Полный путь к файлу кадра с камеры или None
     """
     try:
         files = [f for f in os.listdir(camera_dir) if f.lower().endswith(".png")]
@@ -29,10 +31,8 @@ def _find_closest_camera_image(camera_dir: str, lidar_ts: int):
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="LiDAR processing CLI")
-    parser.add_argument(
-    "--dataset",
-    choices=["helimos", "helipr", "hercules"],
-    required=True)
+    parser.add_argument("--dataset", choices=["helimos", "helipr", "hercules"],
+        required=True)
     parser.add_argument("--bin", type=str, required=False)
     parser.add_argument("--ins", type=str, required=False, help="Путь к INS CSV файлу")
     parser.add_argument("--imu", type=str, required=False, help="Путь к IMU CSV файлу")
@@ -74,8 +74,7 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    # ── Motion Object Segmentation (независимо от --dataset) ──────────────────
-
+    # Motion Object Segmentation
     if args.action == "mos-train":
         from src.motion_segmentation import MotionSegmenter
 
@@ -203,8 +202,7 @@ def main() -> None:
         #               window_name=f"MOS — {len(frames)} frames")
         return
 
-    # ── Стандартные действия по датасетам ────────────────────────────────────
-
+    # Стандартные действия по датасетам
     if args.dataset == "helimos":
         from src.datasets.helimos import load_helimos_frame
         from src.viz.clouds import visualize_point_cloud
@@ -230,8 +228,19 @@ def main() -> None:
             visualize_point_cloud(pc)
 
     elif args.dataset == "hercules":
+        # GPS + INS -> сравнение скоростей
+        if args.gps and args.ins:
+            from src.viz.plots import plot_velocity_comparison
+            from src.config import VELOCITY_PLOT_FILE
+
+            if args.action == "velocity":
+                out = args.output if args.output != GPS_MAP_FILE else VELOCITY_PLOT_FILE
+                plot_velocity_comparison(args.gps, args.ins, out)
+            else:
+                print("Ошибка: для --gps + --ins поддерживается только action='velocity'")
+
         # GPS
-        if args.gps:
+        elif args.gps:
             from src.io.csv_reader import read_GPS
             from src.viz.plots import plot_gps_on_map
 

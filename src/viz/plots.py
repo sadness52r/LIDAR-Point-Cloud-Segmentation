@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import folium
 import pandas as pd
+from scipy.ndimage import uniform_filter1d
 from src.core.pointcloud import PointCloud
 from src.config import MAP_ZOOM_LEVEL, MAP_TILES, POLYLINE_COLOR, POLYLINE_WEIGHT, START_MARKER_COLOR, END_MARKER_COLOR
 
@@ -84,6 +85,100 @@ def plot_gps_on_map(gps_df, output_file='gps_map.html'):
     
     return map_gps
 
+def plot_velocity_comparison(gps_path: str, ins_path: str, output_path: str) -> None:
+    """
+    Графики модуля скорости и угловой скорости рыскания.
+
+    Левый график — скорость, м/с:
+        GPS  — красные точки (из конечных разностей ECEF-координат через GPS_to_V)
+        ИНС  — чёрная линия (из NED-компонент скорости через INS_to_V)
+
+    Правый график — угловая скорость рыскания, °/с:
+        ИНС  — чёрные точки (производная азимута из INSPVA)
+
+    Parameters:
+        gps_path    : путь к GPS CSV (колонки: timestamp_нс, lat, lon, height, ...)
+        ins_path    : путь к INSPVA CSV (колонки: timestamp_нс, lat, lon, height,
+                      Vn, Ve, Vu, roll, pitch, azimuth, status)
+        output_path : путь для сохранения PNG
+    """
+    from src.odometry import GPS_to_V, INS_to_V
+
+    # Загрузка
+    gps_raw = pd.read_csv(gps_path, header=None,
+                          names=["timestamp", "lat", "lon", "height",
+                                 "c4", "c5", "c6", "c7", "c8", "c9", "c10", "c11", "c12"])
+    gps_raw = gps_raw.reset_index(drop=True)
+
+    ins_raw = pd.read_csv(ins_path, header=None,
+                          names=["timestamp", "latitude", "longitude", "height",
+                                 "north_velocity", "east_velocity", "up_velocity",
+                                 "roll", "pitch", "azimuth", "status"])
+    ins_raw = ins_raw.reset_index(drop=True)
+
+    azimuth_raw = ins_raw["azimuth"].values
+
+    # Вычисление скоростей
+    Vx_gps, Vy_gps, ts_gps = GPS_to_V(gps_raw[["timestamp", "lat", "lon", "height"]].copy())
+    speed_gps = np.sqrt(Vx_gps**2 + Vy_gps**2)
+
+    Vx_ins, Vy_ins, ts_ins = INS_to_V(ins_raw[["timestamp", "latitude", "longitude",
+                                                 "north_velocity", "east_velocity",
+                                                 "up_velocity"]].copy())
+    speed_ins = np.sqrt(Vx_ins**2 + Vy_ins**2)
+
+    # Угловая скорость рыскания из азимута INSPVA
+    az_unwrap = np.unwrap(np.radians(azimuth_raw)) * 180.0 / np.pi
+    yaw_rate = np.gradient(az_unwrap, ts_ins)
+
+    # Временная ось: начало с первого движения
+    t0 = ts_ins[0]
+    ts_ins_rel = ts_ins - t0
+    ts_gps_rel = ts_gps - t0
+
+    moving = speed_ins > 0.5
+    t_start = ts_ins_rel[np.argmax(moving)] if moving.any() else 0.0
+
+    gps_mask = (ts_gps_rel >= t_start) & (speed_gps < 12)
+    ts_gps_plot    = ts_gps_rel[gps_mask] - t_start
+    speed_gps_plot = speed_gps[gps_mask]
+
+    ins_mask = ts_ins_rel >= t_start
+    ts_ins_plot    = ts_ins_rel[ins_mask] - t_start
+    speed_ins_plot = uniform_filter1d(speed_ins[ins_mask], size=5)
+    yaw_rate_plot  = yaw_rate[ins_mask]
+
+    # Построение
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
+    fig.subplots_adjust(wspace=0.35, bottom=0.13)
+
+    ax1 = axes[0]
+    ax1.scatter(ts_gps_plot, speed_gps_plot, s=4, c="red", alpha=0.6, zorder=2, label="GPS")
+    ax1.plot(ts_ins_plot, speed_ins_plot, "k-", linewidth=1.5, zorder=3, label="ИНС")
+    ax1.set_xlabel("время, с", fontsize=11)
+    ax1.set_ylabel("скорость, м/с", fontsize=11)
+    ax1.set_xlim(0, ts_ins_plot[-1])
+    ax1.set_ylim(0, 10)
+    ax1.grid(True, linestyle="--", alpha=0.5)
+    ax1.legend(fontsize=10, loc="upper right")
+    ax1.set_title("Скорость (м/с) от времени (с) (GPS + INS)", loc="left", fontsize=11, fontweight="bold")
+
+    ax2 = axes[1]
+    ax2.plot(ts_ins_plot, yaw_rate_plot, "k.", markersize=1.5, zorder=2)
+    ax2.set_xlabel("время, с", fontsize=11)
+    ax2.set_ylabel("угол, град/с", fontsize=11)
+    ax2.set_xlim(0, ts_ins_plot[-1])
+    ax2.axhline(0, color="gray", linewidth=0.8)
+    ax2.grid(True, linestyle="--", alpha=0.5)
+    ax2.set_title("Угол (град) от времени (с)", loc="left", fontsize=11, fontweight="bold")
+
+    import os
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    plt.savefig(output_path, dpi=150, bbox_inches="tight")
+    print(f"График сохранён: {output_path}")
+    plt.show()
+
+
 def plot_ins_track(ins_df: pd.DataFrame) -> None:
     plt.figure()
     plt.plot(ins_df["longitude"], ins_df["latitude"])
@@ -106,8 +201,7 @@ def plot_imu_accel(imu_df: pd.DataFrame) -> None:
     plt.show()
 
 
-# ── MOS 2-D plots ────────────────────────────────────────────────────────────
-
+# MOS 2-D plots
 # Palette matching the Open3D one in clouds.py
 _MOS_PALETTE = [
     "#ff3333",  # red
@@ -154,7 +248,7 @@ def plot_mos(
 
     static_mask = ~is_moving
 
-    # ── Build figure layout ───────────────────────────────────────────────
+    # Build figure layout
     if camera_img is not None:
         if has_velocity:
             fig = plt.figure(figsize=(16, 12))
@@ -176,7 +270,7 @@ def plot_mos(
     if title:
         fig.suptitle(title, fontsize=13)
 
-    # ── Velocity vs Azimuth ───────────────────────────────────────────────
+    # Velocity vs Azimuth
     if has_velocity:
         v = pc.velocity
         ax_vel.scatter(
@@ -199,7 +293,7 @@ def plot_mos(
         ax_vel.legend(loc="lower left", fontsize=8, markerscale=3)
         ax_vel.grid(True, alpha=0.3)
 
-    # ── Bird's-eye view (x, y) ────────────────────────────────────────────
+    # Bird's-eye view (x, y)
     ax_bev.scatter(
         x[static_mask], y[static_mask],
         s=0.3, c="#999999", alpha=0.4, label="static", rasterized=True,
@@ -215,7 +309,7 @@ def plot_mos(
     ax_bev.legend(loc="upper right", fontsize=8, markerscale=3)
     ax_bev.grid(True, alpha=0.3)
 
-    # ── Camera image ──────────────────────────────────────────────────────
+    # Camera image
     if camera_img is not None:
         ax_cam.imshow(camera_img)
         ax_cam.set_title("Stereo Left Camera", fontsize=10)
