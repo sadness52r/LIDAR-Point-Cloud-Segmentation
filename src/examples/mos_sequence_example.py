@@ -1,25 +1,3 @@
-"""
-Покадровая MOS-визуализация Hercules Aeva + стерео-камера → PNG.
-
-Сетка 2×2 с фиксированными осями (как в LiDAR.avi):
-    камера      │ BEV (полный)
-    ────────────┼──────────────
-    velocity    │ BEV (зум)
-
-Использование:
-    python -m src.examples.mos_sequence_example \
-        --aeva   03_Day/Aeva \
-        --camera 03_Day/stereo_left \
-        --model  models/mos_rf.pkl \
-        --output output/mos_frames
-
-    # Собрать GIF (ImageMagick):
-    magick convert -delay 10 -loop 0 output/mos_frames/*.png mos.gif
-
-    # Собрать видео (ffmpeg):
-    ffmpeg -framerate 10 -i output/mos_frames/%06d.png -c:v libx264 -pix_fmt yuv420p mos.mp4
-"""
-
 import sys, os, argparse, glob
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -185,8 +163,7 @@ def _draw_frame(fig, axes, pc, is_moving, ego_params, camera_img,
     )
 
 
-# ── Main ──────────────────────────────────────────────────────────────────────
-
+# Main
 def main():
     parser = argparse.ArgumentParser(description="MOS покадровая визуализация Hercules → PNG")
     parser.add_argument("--aeva", type=str, required=True,
@@ -209,7 +186,7 @@ def main():
                         help="DPI сохраняемых изображений (по умолчанию: 120)")
     args = parser.parse_args()
 
-    # ── Collect frames ────────────────────────────────────────────────────
+    # Collect frames
     bin_files = sorted(glob.glob(os.path.join(args.aeva, "*.bin")))
     if not bin_files:
         print(f"Ошибка: .bin файлов не найдено в {args.aeva}")

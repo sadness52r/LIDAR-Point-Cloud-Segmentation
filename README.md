@@ -71,6 +71,12 @@ python -m src.app --dataset hercules --ins <path_to_ins.csv> --action ego-veloci
 
 # IMU (--imu)
 python -m src.app --dataset hercules --imu <path_to_imu.csv> --action accel
+
+# Сравнение скоростей GPS и ИНС (--gps + --ins)
+python -m src.app --dataset hercules \
+    --gps 03_Day/sensor_data/gps.csv \
+    --ins 03_Day/sensor_data/inspva.csv \
+    --action velocity
 ```
 
 Примечание: приложение использует ленивые импорты — heavy-зависимости (например, `open3d`) подгружаются только при визуализации облака точек, поэтому визуализация GPS работает даже без установки всех пакетов.
@@ -223,6 +229,28 @@ magick convert -delay 10 -loop 0 output/mos_frames/*.png mos.gif
 # MP4 (ffmpeg)
 ffmpeg -framerate 10 -i output/mos_frames/%06d.png -c:v libx264 -pix_fmt yuv420p mos.mp4
 ```
+
+---
+
+## Сравнение скоростей GPS и ИНС (`--action velocity` с `--gps + --ins`)
+
+Строит два графика рядом:
+
+**Модуль скорости, м/с** — сравнение GPS и ИНС:
+- Красные точки — GPS: скорость вычисляется из конечных разностей ECEF-координат (`GPS_to_V` из `src/odometry`). Измерения шумные, но независимые.
+- Чёрная линия — ИНС: скорость из компонент NED-вектора, пересчитанных в ECEF через матрицу поворота (`INS_to_V`). Гладкая высокочастотная оценка.
+
+**Угловая скорость рыскания, °/с** — направление движения из ИНС:
+- Производная азимута (курсового угла) по времени. На прямолинейных участках ≈ 0, на поворотах — характерные пики; каждый пик соответствует одному повороту маршрута.
+
+```bash
+python -m src.app --dataset hercules \
+    --gps 03_Day/sensor_data/gps.csv \
+    --ins 03_Day/sensor_data/inspva.csv \
+    --action velocity
+```
+
+График сохраняется в `velocity_plot.png`. Путь можно переопределить через `--output`.
 
 ---
 
