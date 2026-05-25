@@ -159,6 +159,20 @@ def main() -> None:
         n_total = len(is_moving)
         print(f"Moving: {n_moving}/{n_total} points ({100*n_moving/n_total:.1f}%)")
 
+        # Метрики сегментации против реальных point-wise labels (только HeLiMOS)
+        if args.dataset == "helimos":
+            from src.motion_segmentation import (
+                _find_helimos_label, compute_segmentation_metrics, print_segmentation_metrics,
+            )
+            from src.io.label_reader import read_label
+            label_path = _find_helimos_label(args.bin)
+            if label_path is None:
+                print("[MOS-eval] .label рядом с .bin не найден — метрики пропущены")
+            else:
+                semantic, _ = read_label(label_path)
+                metrics = compute_segmentation_metrics(is_moving, semantic)
+                print_segmentation_metrics(metrics, title=os.path.basename(args.bin))
+
         # DBSCAN кластеризация движущихся точек (4D: xyz + Vr)
         cluster_ids = cluster_moving_objects(
             pc, is_moving,

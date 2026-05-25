@@ -70,7 +70,7 @@ def visualize_mos(
         pc          : облако точек
         is_moving   : bool массив, True = moving
         cluster_ids : опциональный массив из cluster_moving_objects().
-                      Values: -2 -> static, -1 -> шум, ≥0 -> кластер
+                      Values: -2 -> static, -1 -> шум, >=0 -> кластер
         obbs        : опциональный список OBB из compute_cluster_obbs() — каждый
                       рисуется проволочной рамкой в цвет своего кластера
         window_name : заголовок окна Open3D
@@ -88,7 +88,6 @@ def visualize_mos(
             c = _CLUSTER_PALETTE[int(cid) % len(_CLUSTER_PALETTE)]
             colors[mask] = c
     else:
-        # No cluster info: moving -> red, static -> grey
         colors[is_moving] = [1.0, 0.15, 0.15]
 
     pcd = o3d.geometry.PointCloud()
@@ -107,8 +106,7 @@ def visualize_mos(
 
     geometries.extend(_build_legend_lines(has_clusters=cluster_ids is not None))
 
-    # Используем Visualizer напрямую (а не draw_geometries), чтобы поднять
-    # размер точки и затемнить фон
+    # Используем Visualizer, чтобы поднять размер точки и затемнить фон
     vis = o3d.visualization.Visualizer()
     vis.create_window(window_name=window_name, width=1280, height=720)
     for g in geometries:

@@ -17,6 +17,82 @@ from src.io.label_reader import read_label
 STATIC_LABEL = 9    # static environment
 MOVING_LABEL = 251  # moving object
 
+
+def compute_segmentation_metrics(is_moving_pred: np.ndarray,
+                                 semantic_labels: np.ndarray) -> dict:
+    """
+    Метрики бинарной point-wise сегментации static vs moving на HeLiMOS labels.
+
+    Положительный класс = moving. Точки с labels, отличными от STATIC_LABEL
+    и MOVING_LABEL (например, неразмеченные / outside-FOV), исключаются.
+
+    Returns: dict с n, tp/fp/fn/tn, accuracy, precision, recall, f1, iou.
+    """
+    valid = (semantic_labels == STATIC_LABEL) | (semantic_labels == MOVING_LABEL)
+    if not valid.any():
+        return {}
+    y_pred = is_moving_pred[valid].astype(bool)
+    y_true = (semantic_labels[valid] == MOVING_LABEL)
+
+    tp = int(np.sum(y_pred & y_true))
+    fp = int(np.sum(y_pred & ~y_true))
+    fn = int(np.sum(~y_pred & y_true))
+    tn = int(np.sum(~y_pred & ~y_true))
+    n = tp + fp + fn + tn
+
+    acc = (tp + tn) / n if n else float("nan")
+    prec = tp / (tp + fp) if (tp + fp) else 0.0
+    rec = tp / (tp + fn) if (tp + fn) else 0.0
+    f1 = 2 * prec * rec / (prec + rec) if (prec + rec) > 0 else 0.0
+    iou = tp / (tp + fp + fn) if (tp + fp + fn) else 0.0
+
+    return dict(n=n, n_moving_gt=int(y_true.sum()), n_static_gt=int((~y_true).sum()),
+                tp=tp, fp=fp, fn=fn, tn=tn,
+                accuracy=acc, precision=prec, recall=rec, f1=f1, iou=iou)
+
+
+def print_segmentation_metrics(m: dict, title: str = "") -> None:
+    """Печать метрик сегментации в человекочитаемом виде."""
+    if not m:
+        print("[MOS-eval] нет валидных labels (static=9 или moving=251)")
+        return
+    print()
+    print("=" * 70)
+    header = "Метрики сегментации (static vs moving)"
+    if title:
+        header += f" — {title}"
+    print(header)
+    print("=" * 70)
+    print(f"  N валидных точек: {m['n']}  "
+          f"(ground truth: moving={m['n_moving_gt']}, static={m['n_static_gt']})")
+    print(f"  TP={m['tp']:>8}  FP={m['fp']:>8}  FN={m['fn']:>8}  TN={m['tn']:>8}")
+    print(f"  Accuracy  = {m['accuracy']:.4f}")
+    print(f"  Precision = {m['precision']:.4f}   (класс moving)")
+    print(f"  Recall    = {m['recall']:.4f}   (класс moving)")
+    print(f"  F1        = {m['f1']:.4f}   (класс moving)")
+    print(f"  IoU       = {m['iou']:.4f}   (класс moving)")
+    print("=" * 70)
+    print()
+
+
+def _find_helimos_label(bin_path: str) -> "str | None":
+    """
+    Из пути к .bin кадру HeLiMOS получить путь к соответствующему .label.
+    Возвращает None если файл отсутствует.
+    Структура HeLiMOS: <sensor>/velodyne/000123.bin → <sensor>/labels/000123.label
+    """
+    import os as _os
+    parts = bin_path.replace("\\", "/").split("/")
+    try:
+        i = len(parts) - 1 - parts[::-1].index("velodyne")
+    except ValueError:
+        return None
+    parts[i] = "labels"
+    label_path = _os.path.join(*parts)
+    stem, _ = _os.path.splitext(label_path)
+    label_path = stem + ".label"
+    return label_path if _os.path.exists(label_path) else None
+
 # Feature extraction
 def _extract_features(pc: PointCloud) -> np.ndarray:
     """
@@ -198,7 +274,7 @@ def cluster_moving_objects(
 
     Returns:
         cluster_ids : int32 ndarray (N,)
-            -2 -> static, -1 -> noise среди moving, ≥0 -> id кластера
+            -2 -> static, -1 -> noise среди moving, >=0 -> id кластера
     """
     cluster_ids = np.full(len(is_moving), -2, dtype=np.int32)
     moving_idx = np.where(is_moving)[0]
@@ -218,8 +294,6 @@ def cluster_moving_objects(
             xyz_mov, vel_mov, eps_xyz, min_samples, eps_vr,
         )
     else:
-        # Single-stage: 4D (xyz + Vr*weight). Чтобы Vr и xyz «жили» в одном
-        # пространстве с понятным eps, домножаем Vr на eps_xyz/eps_vr.
         if has_vel:
             vr_scale = eps_xyz / max(eps_vr, 1e-6)
             features = np.column_stack([xyz_mov, vel_mov * vr_scale])
